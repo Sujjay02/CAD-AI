@@ -65,11 +65,12 @@ with cols[0]:
 
         # Send to KronosLabs
         response = client.chat.completions.create(
-            prompt=st.session_state.history,
+            messages=st.session_state.history,
             model="hermes",
             temperature=0.3,
             is_stream=False
-        )
+        )   
+
         ai_message = response.choices[0].message.content
         st.session_state.messages.append(("🤖 AI", ai_message))
         st.session_state.history.append({"role": "assistant", "content": ai_message})
