@@ -1,5 +1,6 @@
 import streamlit as st
 import os
+import re
 import cadquery as cq
 import trimesh
 from kronoslabs import KronosLabs
@@ -11,9 +12,17 @@ MODELS_DIR = os.path.join(ROOT_DIR, "models")
 os.makedirs(MODELS_DIR, exist_ok=True)
 
 # === KRONOS CLIENT ===
-client = KronosLabs(api_key="kl_ee83673ca58773041338f9db70d600e0d6f6c6124e71cdff15728f62b9c3417a")  # replace with your key
+client = KronosLabs(api_key="kl_ee83673ca58773041338f9db70d600e0d6f6c6124e71cdff15728f62b9c3417a")  # 🔑 plug in your key
 
 # === UTILITIES ===
+def prompt_to_filename(prompt: str) -> str:
+    """Convert a text prompt into a filesystem-safe STL file name."""
+    name = re.sub(r"[^a-zA-Z0-9]+", "_", prompt.lower()).strip("_")
+    if len(name) > 40:
+        name = name[:40]
+    return f"{name or 'model'}.stl"
+
+
 def safe_exec(code: str):
     """Safely execute CadQuery code and return model object if created."""
     local_vars = {}
@@ -27,14 +36,13 @@ def safe_exec(code: str):
     return None
 
 
-def export_and_preview(model, filename="ai_output.stl"):
-    """Export the model to STL and generate a 3D preview."""
+def export_and_preview(model, filename):
+    """Export model to STL, preview it, and store path in session."""
     stl_path = os.path.join(MODELS_DIR, filename)
     cq.exporters.export(model, stl_path)
     mesh = trimesh.load(stl_path)
     scene = trimesh.Scene(mesh) if isinstance(mesh, trimesh.Trimesh) else mesh
 
-    # Choose best visualization method
     if hasattr(scene, "to_html"):
         html = scene.to_html()
     elif hasattr(scene, "show"):
@@ -47,13 +55,14 @@ def export_and_preview(model, filename="ai_output.stl"):
         """
 
     st.session_state.preview_html = html
+    st.session_state.exported_file = stl_path
     return stl_path
 
 
-# === STREAMLIT APP ===
-st.title("🧠 CAD AI — STL Model Generator")
+# === STREAMLIT UI ===
+st.title("🧠 CAD AI — STL Model Generator (Auto-Naming Edition)")
 
-prompt = st.text_area("Describe the 3D model you want to generate:", height=100)
+prompt = st.text_area("Describe your 3D model:", height=100)
 generate = st.button("⚙️ Generate and Save Model")
 
 if generate:
@@ -76,14 +85,24 @@ if generate:
 
             model = safe_exec(ai_code)
             if model:
-                file_path = export_and_preview(model)
-                st.success(f"✅ Model generated and saved to: {file_path}")
+                file_name = prompt_to_filename(prompt)
+                file_path = export_and_preview(model, file_name)
+                st.success(f"✅ Model saved as: {file_name}")
             else:
                 st.error("⚠️ AI didn't produce a valid CadQuery model.")
-
         except Exception as e:
             st.error(f"Error: {e}")
 
-# === PREVIEW ===
+# === PREVIEW + DOWNLOAD ===
 if "preview_html" in st.session_state:
+    st.subheader("🧩 3D Preview")
     st.components.v1.html(st.session_state.preview_html, height=600)
+
+if "exported_file" in st.session_state and os.path.exists(st.session_state.exported_file):
+    with open(st.session_state.exported_file, "rb") as f:
+        st.download_button(
+            label="⬇️ Download STL File",
+            data=f,
+            file_name=os.path.basename(st.session_state.exported_file),
+            mime="application/sla",
+        )
