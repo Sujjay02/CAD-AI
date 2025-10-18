@@ -16,7 +16,7 @@ client = KronosLabs(api_key="kl_ee83673ca58773041338f9db70d600e0d6f6c6124e71cdff
 
 # === UTILITIES ===
 def prompt_to_filename(prompt: str) -> str:
-    """Convert a text prompt into a filesystem-safe STL file name."""
+    """Convert a text prompt into a short filesystem-safe STL file name."""
     name = re.sub(r"[^a-zA-Z0-9]+", "_", prompt.lower()).strip("_")
     if len(name) > 40:
         name = name[:40]
