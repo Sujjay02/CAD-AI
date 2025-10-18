@@ -2,7 +2,7 @@ import streamlit as st
 import os
 import re
 import cadquery as cq
-import trimesh
+import tempfile
 from kronoslabs import KronosLabs
 
 # === PATHS ===
@@ -12,19 +12,17 @@ MODELS_DIR = os.path.join(ROOT_DIR, "models")
 os.makedirs(MODELS_DIR, exist_ok=True)
 
 # === KRONOS CLIENT ===
-client = KronosLabs(api_key="kl_ee83673ca58773041338f9db70d600e0d6f6c6124e71cdff15728f62b9c3417a")  # 🔑 plug in your key
+client = KronosLabs(api_key="kl_ee83673ca58773041338f9db70d600e0d6f6c6124e71cdff15728f62b9c3417a")  # <--- replace this
 
-# === UTILITIES ===
+# === HELPERS ===
 def prompt_to_filename(prompt: str) -> str:
-    """Convert a text prompt into a short filesystem-safe STL file name."""
+    """Convert natural-language prompt into safe STL filename."""
     name = re.sub(r"[^a-zA-Z0-9]+", "_", prompt.lower()).strip("_")
-    if len(name) > 40:
-        name = name[:40]
-    return f"{name or 'model'}.stl"
+    return f"{name[:40] or 'model'}.stl"
 
 
 def safe_exec(code: str):
-    """Safely execute CadQuery code and return model object if created."""
+    """Run CadQuery code and return the first Workplane object."""
     local_vars = {}
     try:
         exec(code, {"cq": cq}, local_vars)
@@ -32,27 +30,34 @@ def safe_exec(code: str):
             if isinstance(v, cq.Workplane):
                 return v
     except Exception as e:
-        st.error(f"❌ Error in generated code: {e}")
+        st.error(f"❌ Error executing generated code:\n\n{e}")
     return None
 
 
-def export_and_preview(model, filename):
-    """Export model to STL, preview it, and store path in session."""
+def export_and_embed(model, filename):
+    """Export STL and embed it in a model-viewer served by Streamlit."""
+    # Save STL to the /models directory
     stl_path = os.path.join(MODELS_DIR, filename)
     cq.exporters.export(model, stl_path)
-    mesh = trimesh.load(stl_path)
-    scene = trimesh.Scene(mesh) if isinstance(mesh, trimesh.Trimesh) else mesh
 
-    if hasattr(scene, "to_html"):
-        html = scene.to_html()
-    elif hasattr(scene, "show"):
-        html = scene.show(jupyter=False)
-    else:
-        stl_url = f"file://{stl_path}"
-        html = f"""
-        <model-viewer src="{stl_url}" auto-rotate camera-controls style="width:100%;height:600px;"></model-viewer>
-        <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
-        """
+    # Reopen and read the file so Streamlit can serve it via HTTP
+    with open(stl_path, "rb") as f:
+        st.session_state.stl_data = f.read()
+
+    # Generate an HTML component for 3D preview using the data URI
+    import base64
+    stl_base64 = base64.b64encode(st.session_state.stl_data).decode("utf-8")
+
+    html = f"""
+    <model-viewer src="data:model/stl;base64,{stl_base64}"
+                  alt="3D preview"
+                  auto-rotate
+                  camera-controls
+                  background-color="#f0f0f0"
+                  style="width:100%;height:600px;">
+    </model-viewer>
+    <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
+    """
 
     st.session_state.preview_html = html
     st.session_state.exported_file = stl_path
@@ -60,20 +65,18 @@ def export_and_preview(model, filename):
 
 
 # === STREAMLIT UI ===
-st.title("🧠 CAD AI — STL Model Generator (Auto-Naming Edition)")
+st.title("🧠 CAD AI — STL Generator with 3D Preview")
 
 prompt = st.text_area("Describe your 3D model:", height=100)
-generate = st.button("⚙️ Generate and Save Model")
+generate = st.button("⚙️ Generate and Preview")
 
 if generate:
-    with st.spinner("🧩 Generating model from AI..."):
+    with st.spinner("🧩 AI is generating your model..."):
         try:
             response = client.chat.completions.create(
                 prompt=(
-                    f"Write a valid CadQuery script to create this model: {prompt}\n"
-                    f"Only output Python code. Define a variable named 'model' "
-                    f"as a cq.Workplane object. Example:\n"
-                    f"model = cq.Workplane('XY').box(10,10,10)"
+                    f"Write a CadQuery Python script that creates this model: {prompt}. "
+                    f"Define it as `model = cq.Workplane('XY')...` and nothing else."
                 ),
                 model="hermes",
                 temperature=0.4,
@@ -85,15 +88,15 @@ if generate:
 
             model = safe_exec(ai_code)
             if model:
-                file_name = prompt_to_filename(prompt)
-                file_path = export_and_preview(model, file_name)
-                st.success(f"✅ Model saved as: {file_name}")
+                filename = prompt_to_filename(prompt)
+                export_and_embed(model, filename)
+                st.success(f"✅ Model saved as `{filename}`.")
             else:
-                st.error("⚠️ AI didn't produce a valid CadQuery model.")
+                st.error("⚠️ The AI didn’t produce a valid CadQuery model.")
         except Exception as e:
             st.error(f"Error: {e}")
 
-# === PREVIEW + DOWNLOAD ===
+# === 3D PREVIEW + DOWNLOAD ===
 if "preview_html" in st.session_state:
     st.subheader("🧩 3D Preview")
     st.components.v1.html(st.session_state.preview_html, height=600)
@@ -101,7 +104,7 @@ if "preview_html" in st.session_state:
 if "exported_file" in st.session_state and os.path.exists(st.session_state.exported_file):
     with open(st.session_state.exported_file, "rb") as f:
         st.download_button(
-            label="⬇️ Download STL File",
+            label="⬇️ Download STL",
             data=f,
             file_name=os.path.basename(st.session_state.exported_file),
             mime="application/sla",
