@@ -16,7 +16,7 @@ client = KronosLabs(api_key="kl_ee83673ca58773041338f9db70d600e0d6f6c6124e71cdff
 
 # === HELPERS ===
 def prompt_to_filename(prompt: str) -> str:
-    """Convert natural-language prompt into safe STL filename."""
+    """Convert natural-language prompt into safe STL filename. Must <= 10 chars."""
     name = re.sub(r"[^a-zA-Z0-9]+", "_", prompt.lower()).strip("_")
     return f"{name[:40] or 'model'}.stl"
 
@@ -76,7 +76,7 @@ if generate:
             response = client.chat.completions.create(
                 prompt=(
                     f"Write a CadQuery Python script that creates this model: {prompt}. "
-                    f"Define it as `model = cq.Workplane('XY')...` and nothing else."
+                    f"Define it as `model = cq.Workplane('XY')...` and nothing else. NO EXPLANATIONS."
                 ),
                 model="hermes",
                 temperature=0.4,
