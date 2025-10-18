@@ -79,8 +79,8 @@ def save_history(history):
         json.dump(history, f, indent=2)
 
 # === STREAMLIT UI ===
-st.set_page_config(page_title="CAD AI — Refinement Chain", layout="wide")
-st.title("🧠 CAD AI — Refinement Chain Mode")
+st.set_page_config(page_title="CADgpt", layout="wide")
+st.title("🧠 CADgpt")
 
 if "history" not in st.session_state:
     st.session_state.history = load_history()
