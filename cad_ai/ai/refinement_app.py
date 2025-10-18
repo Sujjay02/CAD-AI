@@ -43,9 +43,16 @@ def export_and_preview(model):
     """Export current model and display 3D view."""
     tmp_path = os.path.join(MODELS_DIR, "temp.stl")
     cq.exporters.export(model, tmp_path)
+
     mesh = trimesh.load(tmp_path)
-    st.session_state.preview_html = mesh.scene().save_as_html()
+    if isinstance(mesh, trimesh.Trimesh):
+        scene = trimesh.Scene(mesh)
+    else:
+        scene = mesh
+
+    st.session_state.preview_html = scene.save_as_html()
     return tmp_path
+
 
 # ==============================
 # 🖥️ UI
