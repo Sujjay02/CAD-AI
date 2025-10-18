@@ -64,22 +64,29 @@ with cols[0]:
         st.session_state.messages.append(("🧠 You", user_input))
 
         # Send to KronosLabs
-        response = client.chat.completions.create(
-            messages=st.session_state.history,
-            model="hermes",
-            temperature=0.3,
-            is_stream=False
-        )   
+        # Combine chat history into one text prompt
+    chat_text = ""
+    for item in st.session_state.history:
+        role = item["role"].upper()
+        chat_text += f"{role}: {item['content']}\n"
 
-        ai_message = response.choices[0].message.content
-        st.session_state.messages.append(("🤖 AI", ai_message))
-        st.session_state.history.append({"role": "assistant", "content": ai_message})
+    response = client.chat.completions.create(
+        prompt=chat_text,
+        model="hermes",
+        temperature=0.3,
+        is_stream=False
+    )
+
+
+    ai_message = response.choices[0].message.content
+    st.session_state.messages.append(("🤖 AI", ai_message))
+    st.session_state.history.append({"role": "assistant", "content": ai_message})
 
         # Execute returned code
-        apply_cad_code(ai_message)
+    apply_cad_code(ai_message)
 
         # Update preview
-        export_and_preview(st.session_state.model)
+    export_and_preview(st.session_state.model)
 
     # display conversation
     for sender, msg in st.session_state.messages[::-1]:
