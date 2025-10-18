@@ -1,112 +1,101 @@
 import os
-import cadquery as cq
 import streamlit as st
-import tempfile
+import cadquery as cq
 import trimesh
 from kronoslabs import KronosLabs
 
-# ==============================
-# 🔧 Setup
-# ==============================
-st.set_page_config(page_title="CAD AI Refinement", page_icon="🧠", layout="wide")
-
-ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-MODELS_DIR = os.path.join(ROOT_DIR, "models")
+# -------------------------------
+# 📦 Setup
+# -------------------------------
+MODELS_DIR = os.path.join(os.path.dirname(__file__), "models")
 os.makedirs(MODELS_DIR, exist_ok=True)
 
-API_KEY = os.getenv("KRONOS_API_KEY", "kl_ee83673ca58773041338f9db70d600e0d6f6c6124e71cdff15728f62b9c3417a")
-client = KronosLabs(api_key=API_KEY)
+client = KronosLabs(api_key="your-kronoslabs-api-key-here")
 
-# session state
-if "model" not in st.session_state:
-    st.session_state.model = cq.Workplane("XY")
-if "history" not in st.session_state:
-    st.session_state.history = [
-        {"role": "system", "content": "You are a CAD assistant that writes valid CadQuery code. \
-Respond only with Python code using 'model = ...' or modifications to 'model'."}
-    ]
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-# ==============================
-# 🧩 Helper functions
-# ==============================
-def apply_cad_code(code_snippet):
-    """Execute AI-generated CadQuery code."""
-    try:
-        exec(code_snippet, {"cq": cq, "model": st.session_state.model})
-        st.success("✅ Successfully applied AI update.")
-    except Exception as e:
-        st.error(f"❌ Error: {e}")
-
+# -------------------------------
+# ⚙️ Model export & preview
+# -------------------------------
 def export_and_preview(model):
     """Export current model and display 3D view."""
     tmp_path = os.path.join(MODELS_DIR, "temp.stl")
     cq.exporters.export(model, tmp_path)
 
     mesh = trimesh.load(tmp_path)
+
+    # Wrap into a Scene if needed
     if isinstance(mesh, trimesh.Trimesh):
         scene = trimesh.Scene(mesh)
     else:
         scene = mesh
 
-    st.session_state.preview_html = scene.save_as_html()
+    # Use correct HTML export method
+    if hasattr(scene, "to_html"):
+        st.session_state.preview_html = scene.to_html()
+    else:
+        st.session_state.preview_html = "<p>3D preview not supported in this trimesh version.</p>"
+
     return tmp_path
 
+# -------------------------------
+# 💬 Kronos AI interaction
+# -------------------------------
+def ai_refine(prompt):
+    """Send current user prompt to KronosLabs AI."""
+    try:
+        response = client.chat.completions.create(
+            model="hermes",
+            prompt=prompt,
+            temperature=0.7,
+            is_stream=False
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        st.error(f"AI request failed: {e}")
+        return None
 
-# ==============================
-# 🖥️ UI
-# ==============================
-st.title("🧠 CAD AI Refinement Chat")
-st.caption("Talk to your CAD assistant — generate and refine 3D models in real time.")
+# -------------------------------
+# 🚀 Streamlit UI
+# -------------------------------
+st.set_page_config(page_title="CAD Refinement AI", layout="wide")
 
-cols = st.columns([2, 3])
+st.title("🤖 CAD Refinement Assistant")
+st.write("Use natural language to refine your 3D model interactively.")
 
-with cols[0]:
-    st.subheader("💬 Chat with AI")
-    user_input = st.text_input("Type a design command:", placeholder="e.g. create a 40x20x5 plate with a 10mm hole")
-
-    if st.button("Send", use_container_width=True) and user_input:
-        st.session_state.history.append({"role": "user", "content": user_input})
-        st.session_state.messages.append(("🧠 You", user_input))
-
-        # Send to KronosLabs
-        # Combine chat history into one text prompt
-    chat_text = ""
-    for item in st.session_state.history:
-        role = item["role"].upper()
-        chat_text += f"{role}: {item['content']}\n"
-
-    response = client.chat.completions.create(
-        prompt=chat_text,
-        model="hermes",
-        temperature=0.3,
-        is_stream=False
-    )
-
-
-    ai_message = response.choices[0].message.content
-    st.session_state.messages.append(("🤖 AI", ai_message))
-    st.session_state.history.append({"role": "assistant", "content": ai_message})
-
-        # Execute returned code
-    apply_cad_code(ai_message)
-
-        # Update preview
+if "model" not in st.session_state:
+    st.session_state.model = cq.Workplane("XY").box(10, 10, 10)
     export_and_preview(st.session_state.model)
 
-    # display conversation
-    for sender, msg in st.session_state.messages[::-1]:
-        st.markdown(f"**{sender}:** {msg}")
+if "history" not in st.session_state:
+    st.session_state.history = []
 
-    if st.button("💾 Export STL", use_container_width=True):
-        export_path = os.path.join(MODELS_DIR, "exported_model.stl")
-        cq.exporters.export(st.session_state.model, export_path)
-        st.download_button("Download STL", open(export_path, "rb"), file_name="model.stl")
+# 3D Preview Panel
+col1, col2 = st.columns([2, 1])
 
-with cols[1]:
-    st.subheader("🧱 Model Preview")
-    if "preview_html" in st.session_state:
-        st.components.v1.html(st.session_state.preview_html, height=600)
+with col1:
+    st.subheader("3D Preview")
+    st.components.v1.html(st.session_state.preview_html, height=600)
+
+with col2:
+    st.subheader("AI Refinement")
+    user_prompt = st.text_area("Describe how to change the model:", height=150)
+    if st.button("Refine Model"):
+        if user_prompt.strip():
+            st.session_state.history.append({"role": "user", "content": user_prompt})
+
+            with st.spinner("Refining with Kronos AI..."):
+                ai_response = ai_refine(user_prompt)
+                if ai_response:
+                    st.session_state.history.append({"role": "assistant", "content": ai_response})
+                    st.success("✅ Model refinement complete!")
+                    # TODO: Add code execution of AI's CAD edits here (Phase 5)
+        else:
+            st.warning("Please enter a prompt first.")
+
+st.divider()
+st.subheader("Conversation Log")
+
+for msg in st.session_state.history:
+    if msg["role"] == "user":
+        st.markdown(f"**🧑 You:** {msg['content']}")
     else:
-        st.info("Generate something to preview it here.")
+        st.markdown(f"**🤖 AI:** {msg['content']}")
