@@ -98,8 +98,31 @@ for i, h in enumerate(reversed(st.session_state.history)):
         st.session_state.last_prompt = h["prompt"]
 
 # === MAIN UI ===
-prompt = st.text_area("Describe your 3D model:", value=st.session_state.get("last_prompt", ""), height=100)
+st.subheader("🧠 CAD Model Generator")
+
+col1, col2 = st.columns([3, 1])
+with col1:
+    prompt = st.text_area(
+        "Describe your 3D model:",
+        value=st.session_state.get("last_prompt", ""),
+        height=100
+    )
+with col2:
+    # 🆕 New Chat button — resets everything
+    if st.button("🆕 New Chat", use_container_width=True):
+        for key in [
+            "preview_html",
+            "exported_file",
+            "last_code",
+            "last_prompt"
+        ]:
+            st.session_state.pop(key, None)
+        st.success("✨ New chat started — ready for a fresh model!")
+        st.rerun()
+
 generate = st.button("⚙️ Generate Fresh Model")
+
+
 
 refine_prompt = st.text_input("🔁 Refine last model (describe change):", placeholder="e.g. make the base thicker")
 refine = st.button("✏️ Apply Refinement")
