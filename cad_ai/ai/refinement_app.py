@@ -1,101 +1,95 @@
-import os
 import streamlit as st
+import os
 import cadquery as cq
 import trimesh
 from kronoslabs import KronosLabs
 
-# -------------------------------
-# 📦 Setup
-# -------------------------------
-MODELS_DIR = os.path.join(os.path.dirname(__file__), "models")
+# === PATH SETUP ===
+BASE_DIR = os.path.dirname(__file__)
+ROOT_DIR = os.path.abspath(os.path.join(BASE_DIR, ".."))
+MODELS_DIR = os.path.join(ROOT_DIR, "models")
 os.makedirs(MODELS_DIR, exist_ok=True)
 
-client = KronosLabs(api_key="your-kronoslabs-api-key-here")
+# === AI CLIENT ===
+client = KronosLabs(api_key="kl_ee83673ca58773041338f9db70d600e0d6f6c6124e71cdff15728f62b9c3417a")  # replace with your key
 
-# -------------------------------
-# ⚙️ Model export & preview
-# -------------------------------
+# === UTILS ===
 def export_and_preview(model):
-    """Export current model and display 3D view."""
+    """Export current model and generate best-possible preview."""
     tmp_path = os.path.join(MODELS_DIR, "temp.stl")
     cq.exporters.export(model, tmp_path)
-
     mesh = trimesh.load(tmp_path)
 
-    # Wrap into a Scene if needed
-    if isinstance(mesh, trimesh.Trimesh):
-        scene = trimesh.Scene(mesh)
-    else:
-        scene = mesh
+    # Make sure we have a Scene object
+    scene = trimesh.Scene(mesh) if isinstance(mesh, trimesh.Trimesh) else mesh
 
-    # Use correct HTML export method
+    # Try multiple preview methods
+    html_preview = None
+
+    # Try to_html() (newer versions)
     if hasattr(scene, "to_html"):
-        st.session_state.preview_html = scene.to_html()
-    else:
-        st.session_state.preview_html = "<p>3D preview not supported in this trimesh version.</p>"
+        try:
+            html_preview = scene.to_html()
+        except Exception as e:
+            print(f"[WARN] to_html() failed: {e}")
 
+    # Try show() (interactive fallback)
+    if html_preview is None and hasattr(scene, "show"):
+        try:
+            html_preview = scene.show(jupyter=False)
+        except Exception as e:
+            print(f"[WARN] show() failed: {e}")
+
+    # Last resort: basic HTML viewer
+    if html_preview is None:
+        stl_url = f"file://{tmp_path}"
+        html_preview = f"""
+        <html>
+        <body style='margin:0;padding:0;'>
+            <model-viewer src="{stl_url}" auto-rotate camera-controls style="width:100%;height:600px;"></model-viewer>
+            <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
+        </body>
+        </html>
+        """
+
+    st.session_state.preview_html = html_preview
     return tmp_path
 
-# -------------------------------
-# 💬 Kronos AI interaction
-# -------------------------------
-def ai_refine(prompt):
-    """Send current user prompt to KronosLabs AI."""
-    try:
-        response = client.chat.completions.create(
-            model="hermes",
-            prompt=prompt,
-            temperature=0.7,
-            is_stream=False
-        )
-        return response.choices[0].message.content
-    except Exception as e:
-        st.error(f"AI request failed: {e}")
-        return None
 
-# -------------------------------
-# 🚀 Streamlit UI
-# -------------------------------
-st.set_page_config(page_title="CAD Refinement AI", layout="wide")
-
-st.title("🤖 CAD Refinement Assistant")
-st.write("Use natural language to refine your 3D model interactively.")
-
-if "model" not in st.session_state:
-    st.session_state.model = cq.Workplane("XY").box(10, 10, 10)
-    export_and_preview(st.session_state.model)
+# === STREAMLIT UI ===
+st.title("🧠 CAD AI — Model Refinement Assistant")
 
 if "history" not in st.session_state:
     st.session_state.history = []
+if "model" not in st.session_state:
+    st.session_state.model = (
+        cq.Workplane("XY").box(10, 20, 2).faces(">Z").workplane().hole(5)
+    )
+    export_and_preview(st.session_state.model)
 
-# 3D Preview Panel
-col1, col2 = st.columns([2, 1])
+# --- USER INPUT ---
+user_prompt = st.text_area("Describe a change to make:", height=100)
 
-with col1:
-    st.subheader("3D Preview")
-    st.components.v1.html(st.session_state.preview_html, height=600)
+if st.button("💬 Ask AI to Modify"):
+    with st.spinner("Thinking..."):
+        try:
+            response = client.chat.completions.create(
+                prompt=f"Modify the CAD model based on: {user_prompt}",
+                model="hermes",
+                temperature=0.7,
+                is_stream=False,
+            )
+            result_text = response.choices[0].message.content
+            st.session_state.history.append({"role": "assistant", "content": result_text})
+            st.success("✅ AI processed your request!")
 
-with col2:
-    st.subheader("AI Refinement")
-    user_prompt = st.text_area("Describe how to change the model:", height=150)
-    if st.button("Refine Model"):
-        if user_prompt.strip():
-            st.session_state.history.append({"role": "user", "content": user_prompt})
+            # Example placeholder for model refinement (customize as needed)
+            st.session_state.model = cq.Workplane("XY").box(10, 20, 2)
+            export_and_preview(st.session_state.model)
 
-            with st.spinner("Refining with Kronos AI..."):
-                ai_response = ai_refine(user_prompt)
-                if ai_response:
-                    st.session_state.history.append({"role": "assistant", "content": ai_response})
-                    st.success("✅ Model refinement complete!")
-                    # TODO: Add code execution of AI's CAD edits here (Phase 5)
-        else:
-            st.warning("Please enter a prompt first.")
+        except Exception as e:
+            st.error(f"Error communicating with KronosLabs API: {e}")
 
-st.divider()
-st.subheader("Conversation Log")
-
-for msg in st.session_state.history:
-    if msg["role"] == "user":
-        st.markdown(f"**🧑 You:** {msg['content']}")
-    else:
-        st.markdown(f"**🤖 AI:** {msg['content']}")
+# --- SHOW 3D MODEL ---
+st.subheader("🧩 Model Preview")
+st.components.v1.html(st.session_state.preview_html, height=600)
