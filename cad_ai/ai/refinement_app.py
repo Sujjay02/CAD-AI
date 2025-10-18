@@ -27,40 +27,45 @@ def safe_exec(code: str):
     return None
 
 
-def export_and_preview(model):
-    """Export current model and show preview."""
-    tmp_path = os.path.join(MODELS_DIR, "ai_generated.stl")
-    cq.exporters.export(model, tmp_path)
-    mesh = trimesh.load(tmp_path)
+def export_and_preview(model, filename="ai_output.stl"):
+    """Export the model to STL and generate a 3D preview."""
+    stl_path = os.path.join(MODELS_DIR, filename)
+    cq.exporters.export(model, stl_path)
+    mesh = trimesh.load(stl_path)
     scene = trimesh.Scene(mesh) if isinstance(mesh, trimesh.Trimesh) else mesh
 
-    # Try to preview using to_html, show, or fallback
+    # Choose best visualization method
     if hasattr(scene, "to_html"):
         html = scene.to_html()
     elif hasattr(scene, "show"):
         html = scene.show(jupyter=False)
     else:
-        stl_url = f"file://{tmp_path}"
+        stl_url = f"file://{stl_path}"
         html = f"""
         <model-viewer src="{stl_url}" auto-rotate camera-controls style="width:100%;height:600px;"></model-viewer>
         <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
         """
+
     st.session_state.preview_html = html
+    return stl_path
 
 
-# === STREAMLIT UI ===
-st.title("🧠 CAD AI — Model Generator")
+# === STREAMLIT APP ===
+st.title("🧠 CAD AI — STL Model Generator")
 
 prompt = st.text_area("Describe the 3D model you want to generate:", height=100)
-generate = st.button("⚙️ Generate Model")
+generate = st.button("⚙️ Generate and Save Model")
 
 if generate:
-    with st.spinner("Asking AI to create your model..."):
+    with st.spinner("🧩 Generating model from AI..."):
         try:
             response = client.chat.completions.create(
-                prompt=f"Write a valid CadQuery script to generate this model: {prompt}\n"
-                       f"Only output Python code that defines a variable called model "
-                       f"as a cq.Workplane object. Example: model = cq.Workplane('XY').box(10,10,10)",
+                prompt=(
+                    f"Write a valid CadQuery script to create this model: {prompt}\n"
+                    f"Only output Python code. Define a variable named 'model' "
+                    f"as a cq.Workplane object. Example:\n"
+                    f"model = cq.Workplane('XY').box(10,10,10)"
+                ),
                 model="hermes",
                 temperature=0.4,
                 is_stream=False,
@@ -70,15 +75,14 @@ if generate:
             st.code(ai_code, language="python")
 
             model = safe_exec(ai_code)
-
             if model:
-                export_and_preview(model)
-                st.success("✅ Model generated successfully!")
+                file_path = export_and_preview(model)
+                st.success(f"✅ Model generated and saved to: {file_path}")
             else:
                 st.error("⚠️ AI didn't produce a valid CadQuery model.")
 
         except Exception as e:
-            st.error(f"API error: {e}")
+            st.error(f"Error: {e}")
 
 # === PREVIEW ===
 if "preview_html" in st.session_state:
