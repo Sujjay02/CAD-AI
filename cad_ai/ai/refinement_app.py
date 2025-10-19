@@ -81,6 +81,95 @@ def save_history(history):
 # === STREAMLIT UI ===
 st.set_page_config(page_title="CADgpt", layout="wide")
 
+
+st.markdown(
+    """
+    <style>
+        /* Overall app background */
+        body, [data-testid="stAppViewContainer"], [data-testid="stSidebar"], [data-testid="stHeader"] {
+            background-color: #0d0d0d !important;
+            color: #f5f5f5 !important;
+        }
+
+        /* Sidebar */
+        [data-testid="stSidebar"] {
+            background-color: #121212 !important;
+            padding-top: 0.5rem;
+            padding-right: 0.5rem;
+            padding-left: 0.5rem;
+            border-right: 1px solid #ff6600;
+        }
+
+        /* Sidebar text + icons */
+        [data-testid="stSidebar"] h1, 
+        [data-testid="stSidebar"] h2, 
+        [data-testid="stSidebar"] h3,
+        [data-testid="stSidebar"] p {
+            color: #ff9900 !important;
+        }
+
+        /* Buttons */
+        div.stButton > button {
+            background-color: #ff6600 !important;
+            color: white !important;
+            border-radius: 10px;
+            border: none;
+            padding: 0.5rem 1rem;
+            font-weight: bold;
+        }
+
+        div.stButton > button:hover {
+            background-color: #ff8533 !important;
+            color: black !important;
+        }
+
+        /* Headers in main panel */
+        h1, h2, h3, h4, h5 {
+            color: #ff8000 !important;
+        }
+
+        /* Input boxes and text areas */
+        .stTextInput > div > div > input,
+        textarea {
+            background-color: #1a1a1a !important;
+            color: #f5f5f5 !important;
+            border: 1px solid #ff6600 !important;
+            border-radius: 8px;
+        }
+
+        /* Model history cards */
+        .stMarkdown {
+            background-color: #1a1a1a;
+            border: 1px solid #ff6600;
+            border-radius: 8px;
+            padding: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        /* File download or Load buttons */
+        a, .stDownloadButton > button {
+            background-color: #ff6600 !important;
+            color: white !important;
+            border-radius: 8px;
+            font-weight: 600;
+            border: none;
+        }
+
+        a:hover, .stDownloadButton > button:hover {
+            background-color: #ff8533 !important;
+            color: black !important;
+        }
+
+        /* Tighten spacing */
+        [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3 {
+            margin-top: 0.3rem;
+            margin-bottom: 0.3rem;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
 # --- Tweak sidebar margins ---
 st.markdown(
     """
