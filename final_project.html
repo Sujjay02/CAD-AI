@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+   <meta charset="UTF-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+   <title>Forge</title>
+   <script src="https://cdn.tailwindcss.com"></script>
+   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/TransformControls.js"></script>
+   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/STLExporter.js"></script>
+   <style>
+       body { font-family: 'Inter', sans-serif; overflow: hidden; }
+       #renderer-container { width: 100%; height: 100%; position: relative; cursor: grab; }
+       #renderer-container:active { cursor: grabbing; }
+       canvas { display: block; }
+       .chat-bubble { max-width: 80%; padding: 10px 15px; border-radius: 20px; word-wrap: break-word; }
+       .user-bubble { background-color: #4f46e5; color: white; align-self: flex-end; }
+       .bot-bubble { background-color: #374151; color: #d1d5db; align-self: flex-start; }
+       .loading-dots span { animation: blink 1.4s infinite both; }
+       .loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+       .loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+       @keyframes blink { 0%, 80%, 100% { opacity: 0; } 40% { opacity: 1; } }
+       .control-btn.active { background-color: #4f46e5; color: white; }
+       .info-panel input, .info-panel select {
+           background-color: #374151;
+           border: 1px solid #4b5563;
+           border-radius: 4px;
+           color: white;
+           width: 100%;
+           text-align: right;
+           padding: 2px 4px;
+           font-size: 12px;
+       }
+       .info-panel .axis-label {
+           display: inline-block;
+           width: 12px;
+           text-align: center;
+           color: #9ca3af;
+       }
+       #history-panel, #notification {
+           transition: transform 0.3s ease-in-out, opacity 0.3s ease-in-out;
+       }
+       .toast-enter {
+           opacity: 0;
+           transform: translateY(20px);
+       }
+       .toast-exit {
+           opacity: 0;
+           transform: translateY(20px);
+       }
+   </style>
+</head>
+<body class="bg-gray-900 text-white">
+
+
+   <div class="flex h-screen">
+       <!-- Control Panel -->
+       <div class="w-1/3 max-w-md h-screen flex flex-col bg-gray-800 p-6 shadow-2xl">
+           <div class="flex items-center mb-6 border-b border-gray-700 pb-4">
+               <svg class="h-8 w-8 text-indigo-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                   <path stroke-linecap="round" stroke-linejoin="round" d="M15.362 5.214A8.252 8.252 0 0112 21 8.25 8.25 0 016.038 7.048 8.287 8.287 0 009 9.6a8.983 8.983 0 013.362-3.797z"></path>
+                   <path stroke-linecap="round" stroke-linejoin="round" d="M15.362 5.214C14.418 4.403 13.25 4 12 4a8.25 8.25 0 00-5.424 2.131l3.536 3.536m0 0l4.242-4.242"></path>
+               </svg>
+               <h1 class="text-2xl font-bold text-white ml-3">Forge</h1>
+           </div>
+
+
+           <!-- Project Controls -->
+            <div class="mb-4 p-4 bg-gray-900 rounded-lg space-y-4">
+                <div class="flex items-end justify-between">
+                   <div>
+                       <label for="project-name" class="text-lg font-semibold text-white">Project Name</label>
+                       <input type="text" id="project-name" class="w-full bg-gray-700 rounded-md p-2 text-sm mt-2" placeholder="My Awesome Project">
+                   </div>
+                   <button id="new-project-btn" class="ml-2 mb-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">New</button>
+                </div>
+                <div class="flex justify-between items-center">
+                   <h2 class="text-lg font-semibold text-white">Units</h2>
+                   <select id="units" class="bg-gray-700 rounded-md p-2 text-sm">
+                       <option value="mm">Millimeters (mm)</option>
+                       <option value="cm">Centimeters (cm)</option>
+                       <option value="m">Meters (m)</option>
+                       <option value="in">Inches (in)</option>
+                       <option value="ft">Feet (ft)</option>
+                   </select>
+               </div>
+           </div>
+
+
+           <!-- Chat Interface -->
+           <div class="flex-grow flex flex-col min-h-0">
+               <div id="chat-window" class="flex-grow flex flex-col space-y-4 p-4 overflow-y-auto mb-4 bg-gray-900 rounded-lg">
+                   <div class="chat-bubble bot-bubble">Welcome to Forge! Name your project to start, or load one from History.</div>
+               </div>
+               <div id="loading-indicator" class="hidden items-center mb-2"><div class="chat-bubble bot-bubble loading-dots">Thinking<span>.</span><span>.</span><span>.</span></div></div>
+               <div class="relative"><input type="text" id="chat-input" class="w-full bg-gray-700 text-white rounded-full py-3 pl-5 pr-12 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none transition" placeholder="e.g., 'Create a 50mm red cube'"><button id="send-btn" class="absolute inset-y-0 right-0 flex items-center justify-center bg-indigo-600 hover:bg-indigo-700 text-white font-bold w-10 h-10 rounded-full mr-1.5 my-auto transform transition duration-300"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.428A1 1 0 009.898 16.5l-2.255-.644a1 1 0 00-1.342 1.252l2.28 4.56A1 1 0 0010 22a1 1 0 00.904-.595l2.28-4.56a1 1 0 00-1.342-1.252l-2.255.644a1 1 0 00-.706-1.957l5 1.428a1 1 0 001.17-1.408l-7-14z" /></svg></button></div>
+                <div class="flex space-x-2 mt-4">
+                   <button id="history-btn" class="flex-grow bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">History</button>
+                   <button id="export-btn" class="flex-shrink-0 bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">Export STL</button>
+                   <button id="clear-btn" class="flex-shrink-0 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-2 rounded-lg transition duration-300" title="Clear Scene">
+                       <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                   </button>
+               </div>
+           </div>
+       </div>
+       <div class="w-2/3 h-screen" id="renderer-container">
+           <!-- Manual Controls Toolbar -->
+           <div class="absolute top-0 left-1/2 -translate-x-1/2 z-10 mt-4 p-2 bg-gray-800 bg-opacity-80 rounded-lg flex items-center space-x-2 shadow-lg">
+               <button id="translate-btn" class="control-btn active p-2 bg-gray-700 hover:bg-indigo-600 rounded-md text-gray-300" title="Translate"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12H3M12 21V3M18 6l-6 6-6-6M18 18l-6-6-6 6"/></svg></button>
+               <button id="rotate-btn" class="control-btn p-2 bg-gray-700 hover:bg-indigo-600 rounded-md text-gray-300" title="Rotate"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></button>
+               <button id="scale-btn" class="control-btn p-2 bg-gray-700 hover:bg-indigo-600 rounded-md text-gray-300" title="Scale"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 7.5v-5h-5"/><path d="M2.5 16.5v5h5"/><path d="M16.5 2.5l5 5"/><path d="M7.5 21.5l-5-5"/></svg></button>
+           </div>
+
+
+           <!-- Selected Object Info Panel -->
+           <div id="info-panel" class="info-panel absolute top-4 right-4 z-10 p-3 bg-gray-800 bg-opacity-80 rounded-lg hidden text-sm space-y-2 shadow-lg w-56">
+               <div class="font-bold text-center" id="info-panel-name"></div>
+               <div class="grid grid-cols-4 gap-x-2 items-center">
+                   <span class="font-semibold col-span-1">Pos</span>
+                   <span class="axis-label">X</span><input type="number" step="0.1" id="pos-x">
+                   <span class="axis-label">Y</span><input type="number" step="0.1" id="pos-y">
+                   <span class="axis-label">Z</span><input type="number" step="0.1" id="pos-z">
+               </div>
+                <div class="grid grid-cols-4 gap-x-2 items-center">
+                   <span class="font-semibold col-span-1">Rot</span>
+                   <span class="axis-label">X</span><input type="number" step="1" id="rot-x">
+                   <span class="axis-label">Y</span><input type="number" step="1" id="rot-y">
+                   <span class="axis-label">Z</span><input type="number" step="1" id="rot-z">
+               </div>
+                <div class="grid grid-cols-4 gap-x-2 items-center">
+                   <span class="font-semibold col-span-1">Size</span>
+                   <span class="axis-label">X</span><input type="number" step="0.1" id="size-x">
+                   <span class="axis-label">Y</span><input type="number" step="0.1" id="size-y">
+                   <span class="axis-label">Z</span><input type="number" step="0.1" id="size-z">
+               </div>
+               <div class="border-t border-gray-700 pt-2 space-y-2">
+                   <div class="flex justify-between items-center">
+                       <label for="material-select" class="font-semibold">Material</label>
+                       <select id="material-select" class="w-2/3"></select>
+                   </div>
+                   <div class="flex justify-between items-center">
+                       <span class="font-semibold">Mass</span>
+                       <span id="mass-display">0 kg</span>
+                   </div>
+               </div>
+           </div>
+          
+           <!-- History Panel -->
+           <div id="history-panel" class="absolute top-0 right-0 h-full w-72 bg-gray-800 shadow-2xl p-4 transform translate-x-full z-20">
+               <div class="flex justify-between items-center mb-4">
+                   <h2 class="text-xl font-bold">Project History</h2>
+                   <button id="close-history-btn" class="p-1 hover:bg-gray-700 rounded-full text-2xl leading-none">&times;</button>
+               </div>
+               <div id="history-list" class="space-y-2 overflow-y-auto h-full pb-16"></div>
+           </div>
+          
+           <!-- Save Notification -->
+           <div id="notification" class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-green-500 text-white py-2 px-4 rounded-lg shadow-lg opacity-0 transform translate-y-full">Project Saved!</div>
+       </div>
+   </div>
+
+
+   <script type="module">
+       import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+       import { getFirestore, collection, doc, setDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+       import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+      
+       const firebaseConfigStr = typeof __firebase_config !== 'undefined' ? __firebase_config : '{}';
+       const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+       let db, auth, userId;
+       try {
+           const firebaseConfig = JSON.parse(firebaseConfigStr);
+           const app = initializeApp(firebaseConfig);
+           db = getFirestore(app);
+           auth = getAuth(app);
+       } catch (e) {
+           console.error("Firebase disabled. Running in local mode.", e);
+       }
+      
+       async function authInit() {
+           if (!auth) {
+               userId = 'localuser';
+               setupApp();
+               return;
+           }
+           if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+               await signInWithCustomToken(auth, __initial_auth_token);
+           } else {
+               await signInAnonymously(auth);
+           }
+           onAuthStateChanged(auth, user => {
+               if (user && !userId) {
+                   userId = user.uid;
+                   setupApp();
+               }
+           });
+       }
+      
+       async function saveProject(name, sceneData) {
+           if (!userId || !db) return;
+           try {
+               const collectionPath = `artifacts/${appId}/users/${userId}/projects`;
+               const projectRef = doc(db, collectionPath, name);
+               await setDoc(projectRef, {
+                   name: name,
+                   scene: JSON.stringify(sceneData),
+                   timestamp: new Date()
+               });
+               showNotification("Project Saved!");
+           } catch (error) {
+               console.error("Error saving project: ", error);
+           }
+       }
+
+
+       function listenForProjects() {
+           if (!userId || !db) return;
+           const collectionPath = `artifacts/${appId}/users/${userId}/projects`;
+           const q = query(collection(db, collectionPath), orderBy("timestamp", "desc"));
+           onSnapshot(q, (querySnapshot) => {
+               const historyList = document.getElementById('history-list');
+               historyList.innerHTML = '';
+               if (querySnapshot.empty) {
+                   historyList.innerHTML = `<p class="text-gray-400">No projects saved yet.</p>`;
+               }
+               querySnapshot.forEach((doc) => {
+                   const project = doc.data();
+                   const div = document.createElement('div');
+                   div.className = 'p-3 bg-gray-700 rounded-md cursor-pointer hover:bg-indigo-600 flex justify-between items-center';
+                   div.innerHTML = `<span>${project.name}</span> <span class="text-xs text-gray-400">${new Date(project.timestamp.seconds * 1000).toLocaleDateString()}</span>`;
+                   div.onclick = () => loadProject(project);
+                   historyList.appendChild(div);
+               });
+           });
+       }
+      
+       function setupApp(){
+           listenForProjects();
+           // --- THREE.JS and App Logic ---
+           let scene, camera, renderer, controls, transformControls;
+           let raycaster = new THREE.Raycaster();
+           let mouse = new THREE.Vector2();
+           const sceneObjects = new Map();
+           let objectCounter = 0;
+           const rendererContainer = document.getElementById('renderer-container');
+           let gridHelper;
+
+
+           const units = {
+               m: { factor: 1, name: 'm' }, cm: { factor: 100, name: 'cm' }, mm: { factor: 1000, name: 'mm' },
+               ft: { factor: 3.28084, name: 'ft' }, in: { factor: 39.3701, name: 'in' },
+           };
+           let currentUnit = 'mm';
+
+
+           const materials = {
+               'Steel': { density: 7850, color: 0xafb8c9, roughness: 0.4, metalness: 0.8 },
+               'Aluminum': { density: 2700, color: 0xdadedf, roughness: 0.2, metalness: 0.9 },
+               'Gold': { density: 19300, color: 0xffd700, roughness: 0.1, metalness: 1.0 },
+               'Plastic (ABS)': { density: 1050, color: 0xf0f0f0, roughness: 0.6, metalness: 0.1 },
+               'Wood (Oak)': { density: 750, color: 0x8b5a2b, roughness: 0.8, metalness: 0.0 }
+           };
+
+
+           const infoPanel = document.getElementById('info-panel');
+           const infoName = document.getElementById('info-panel-name');
+           const posInputs = { x: document.getElementById('pos-x'), y: document.getElementById('pos-y'), z: document.getElementById('pos-z') };
+           const rotInputs = { x: document.getElementById('rot-x'), y: document.getElementById('rot-y'), z: document.getElementById('rot-z') };
+           const sizeInputs = { x: document.getElementById('size-x'), y: document.getElementById('size-y'), z: document.getElementById('size-z') };
+           const materialSelect = document.getElementById('material-select');
+           const massDisplay = document.getElementById('mass-display');
+
+
+           function init() {
+               scene = new THREE.Scene();
+               scene.background = new THREE.Color(0x1f2937);
+               camera = new THREE.PerspectiveCamera(60, rendererContainer.clientWidth / rendererContainer.clientHeight, 0.1, 1000);
+               camera.position.set(5, 5, 5);
+               renderer = new THREE.WebGLRenderer({ antialias: true });
+               renderer.setSize(rendererContainer.clientWidth, rendererContainer.clientHeight);
+               renderer.setPixelRatio(window.devicePixelRatio);
+               renderer.shadowMap.enabled = true;
+               rendererContainer.appendChild(renderer.domElement);
+              
+               const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+               scene.add(ambientLight);
+               const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
+               directionalLight.position.set(10, 20, 5);
+               directionalLight.castShadow = true;
+               scene.add(directionalLight);
+
+
+               const floor = new THREE.Mesh(
+                   new THREE.PlaneGeometry(20, 20),
+                   new THREE.MeshStandardMaterial({color: 0x1f2937})
+               );
+               floor.rotation.x = -Math.PI / 2;
+               floor.receiveShadow = true;
+               scene.add(floor);
+
+
+               updateGrid();
+              
+               controls = new THREE.OrbitControls(camera, renderer.domElement);
+               controls.enableDamping = true;
+
+
+               transformControls = new THREE.TransformControls(camera, renderer.domElement);
+               transformControls.addEventListener('dragging-changed', event => { controls.enabled = !event.value; });
+               transformControls.addEventListener('objectChange', () => { updateInfoPanel(transformControls.object); });
+               scene.add(transformControls);
+              
+               Object.keys(materials).forEach(name => {
+                   const option = document.createElement('option');
+                   option.value = name;
+                   option.textContent = name;
+                   materialSelect.appendChild(option);
+               });
+
+
+               window.addEventListener('resize', onWindowResize, false);
+               renderer.domElement.addEventListener('click', onCanvasClick, false);
+              
+               Object.values(posInputs).forEach(input => input.addEventListener('change', handleInfoPanelChange));
+               Object.values(rotInputs).forEach(input => input.addEventListener('change', handleInfoPanelChange));
+               Object.values(sizeInputs).forEach(input => input.addEventListener('change', handleInfoPanelChange));
+               materialSelect.addEventListener('change', handleInfoPanelChange);
+
+
+               animate();
+           }
+
+
+           function updateGrid() {
+                if (gridHelper) scene.remove(gridHelper);
+                const size = 20; const divisions = 20;
+                gridHelper = new THREE.GridHelper(size, divisions, 0x4b5563, 0x374151);
+                gridHelper.position.y = 0.01; // Prevent z-fighting with the floor
+                scene.add(gridHelper);
+           }
+          
+           function getObjectVolume(object) {
+               const size = new THREE.Vector3();
+               new THREE.Box3().setFromObject(object).getSize(size);
+               return size.x * size.y * size.z; // Volume in m^3 (base unit)
+           }
+
+
+           function updateInfoPanel(object) {
+               if (!object) { infoPanel.classList.add('hidden'); return; }
+               infoPanel.classList.remove('hidden');
+               infoName.textContent = object.name;
+               const unitInfo = units[currentUnit];
+               const meterToUnit = units[currentUnit].factor;
+
+
+               posInputs.x.value = (object.position.x * meterToUnit).toFixed(2);
+               posInputs.y.value = (object.position.y * meterToUnit).toFixed(2);
+               posInputs.z.value = (object.position.z * meterToUnit).toFixed(2);
+
+
+               rotInputs.x.value = THREE.MathUtils.radToDeg(object.rotation.x).toFixed(1);
+               rotInputs.y.value = THREE.MathUtils.radToDeg(object.rotation.y).toFixed(1);
+               rotInputs.z.value = THREE.MathUtils.radToDeg(object.rotation.z).toFixed(1);
+              
+               const size = new THREE.Vector3();
+               new THREE.Box3().setFromObject(object).getSize(size);
+               sizeInputs.x.value = (size.x * meterToUnit).toFixed(2);
+               sizeInputs.y.value = (size.y * meterToUnit).toFixed(2);
+               sizeInputs.z.value = (size.z * meterToUnit).toFixed(2);
+              
+               materialSelect.value = object.userData.materialName || 'Steel';
+               updateMass(object);
+           }
+          
+           function updateMass(object) {
+               const materialName = object.userData.materialName || 'Steel';
+               const material = materials[materialName];
+               const volume = getObjectVolume(object);
+               const mass = volume * material.density;
+               massDisplay.textContent = mass > 1 ? `${mass.toFixed(2)} kg` : `${(mass * 1000).toFixed(2)} g`;
+           }
+
+
+           function handleInfoPanelChange() {
+                const object = transformControls.object;
+                if (!object) return;
+                const unitToMeter = 1 / units[currentUnit].factor;
+               
+                object.position.set(
+                   parseFloat(posInputs.x.value) * unitToMeter,
+                   parseFloat(posInputs.y.value) * unitToMeter,
+                   parseFloat(posInputs.z.value) * unitToMeter
+                );
+                object.rotation.set(
+                   THREE.MathUtils.degToRad(parseFloat(rotInputs.x.value)),
+                   THREE.MathUtils.degToRad(parseFloat(rotInputs.y.value)),
+                   THREE.MathUtils.degToRad(parseFloat(rotInputs.z.value))
+                );
+               
+                const newSizeX = parseFloat(sizeInputs.x.value) * unitToMeter;
+                const newSizeY = parseFloat(sizeInputs.y.value) * unitToMeter;
+                const newSizeZ = parseFloat(sizeInputs.z.value) * unitToMeter;
+               
+                const currentSize = new THREE.Vector3();
+                new THREE.Box3().setFromObject(object).getSize(currentSize);
+
+
+                if (currentSize.x > 0.0001) object.scale.x *= newSizeX / currentSize.x;
+                if (currentSize.y > 0.0001) object.scale.y *= newSizeY / currentSize.y;
+                if (currentSize.z > 0.0001) object.scale.z *= newSizeZ / currentSize.z;
+               
+                object.userData.materialName = materialSelect.value;
+                const matProps = materials[materialSelect.value];
+                object.material.color.set(matProps.color);
+                object.material.roughness = matProps.roughness;
+                object.material.metalness = matProps.metalness;
+                updateMass(object);
+           }
+          
+           function onCanvasClick(event) {
+               if (transformControls.dragging) return;
+               const rect = renderer.domElement.getBoundingClientRect();
+               mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+               mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+               raycaster.setFromCamera(mouse, camera);
+               const intersects = raycaster.intersectObjects(Array.from(sceneObjects.values()));
+               if (intersects.length > 0) {
+                   const object = intersects[0].object;
+                   transformControls.attach(object);
+                   updateInfoPanel(object);
+               } else {
+                   transformControls.detach();
+                   infoPanel.classList.add('hidden');
+               }
+           }
+
+
+           function animate() { requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
+          
+           init();
+          
+           const chatInput = document.getElementById('chat-input');
+           const sendBtn = document.getElementById('send-btn');
+           const clearBtn = document.getElementById('clear-btn');
+           const newProjectBtn = document.getElementById('new-project-btn');
+           const exportBtn = document.getElementById('export-btn');
+           const historyBtn = document.getElementById('history-btn');
+           const closeHistoryBtn = document.getElementById('close-history-btn');
+           const historyPanel = document.getElementById('history-panel');
+           const projectNameInput = document.getElementById('project-name');
+           const unitSelector = document.getElementById('units');
+           const translateBtn = document.getElementById('translate-btn');
+           const rotateBtn = document.getElementById('rotate-btn');
+           const scaleBtn = document.getElementById('scale-btn');
+          
+           function addMessageToChat(message, sender) {
+               const chatWindow = document.getElementById('chat-window');
+               const bubble = document.createElement('div');
+               bubble.className = `chat-bubble ${sender}-bubble`;
+               bubble.textContent = message;
+               chatWindow.appendChild(bubble);
+               chatWindow.scrollTop = chatWindow.scrollHeight;
+           }
+          
+           sendBtn.addEventListener('click', handleUserMessage);
+           chatInput.addEventListener('keydown', (e) => e.key === 'Enter' && (e.preventDefault(), handleUserMessage()));
+           clearBtn.addEventListener('click', () => {
+               if (confirm('Are you sure you want to clear the scene? This cannot be undone.')) {
+                   clearScene(false);
+               }
+           });
+           newProjectBtn.addEventListener('click', () => {
+               if (confirm('Are you sure you want to start a new project? Unsaved changes will be lost.')) {
+                   clearScene(true);
+               }
+           });
+           exportBtn.addEventListener('click', exportSTL);
+           historyBtn.addEventListener('click', () => historyPanel.classList.remove('translate-x-full'));
+           closeHistoryBtn.addEventListener('click', () => historyPanel.classList.add('translate-x-full'));
+          
+           let saveTimeout;
+           projectNameInput.addEventListener('input', () => {
+               clearTimeout(saveTimeout);
+               saveTimeout = setTimeout(() => {
+                   const name = projectNameInput.value.trim();
+                   if (name) saveProject(name, serializeScene());
+               }, 1500);
+           });
+          
+           unitSelector.addEventListener('change', (e) => {
+               currentUnit = e.target.value;
+               if(transformControls.object) updateInfoPanel(transformControls.object);
+           });
+          
+           translateBtn.addEventListener('click', () => setTransformMode('translate'));
+           rotateBtn.addEventListener('click', () => setTransformMode('rotate'));
+           scaleBtn.addEventListener('click', () => setTransformMode('scale'));
+
+
+           function onWindowResize() { camera.aspect = rendererContainer.clientWidth / rendererContainer.clientHeight; camera.updateProjectionMatrix(); renderer.setSize(rendererContainer.clientWidth, rendererContainer.clientHeight); }
+           function setTransformMode(mode) { transformControls.setMode(mode); document.querySelectorAll('.control-btn').forEach(b => b.classList.remove('active')); document.getElementById(`${mode}-btn`).classList.add('active');}
+          
+           function serializeScene() {
+               return Array.from(sceneObjects.values()).map(obj => ({
+                   name: obj.name,
+                   shape: obj.userData.shape,
+                   position: obj.position.toArray(),
+                   rotation: obj.rotation.toArray(),
+                   scale: obj.scale.toArray(),
+                   materialName: obj.userData.materialName,
+               }));
+           }
+          
+           function loadProject(project) {
+               clearScene(false);
+               const sceneData = JSON.parse(project.scene);
+               sceneData.forEach(objData => {
+                   const op = {
+                       shape: objData.shape,
+                       scale: { x: objData.scale[0], y: objData.scale[1], z: objData.scale[2] },
+                       position: { x: objData.position[0], y: objData.position[1], z: objData.position[2] },
+                   };
+                   const mesh = createObject(op, objData.name);
+                   mesh.rotation.fromArray(objData.rotation);
+                   mesh.userData.materialName = objData.materialName;
+                   const matProps = materials[objData.materialName];
+                   if(matProps){
+                       mesh.material.color.set(matProps.color);
+                       mesh.material.roughness = matProps.roughness;
+                       mesh.material.metalness = matProps.metalness;
+                   }
+               });
+               projectNameInput.value = project.name;
+               historyPanel.classList.add('translate-x-full');
+               addMessageToChat(`Project "${project.name}" loaded.`, 'bot');
+           }
+
+
+           function exportSTL() { const exporter = new THREE.STLExporter(); const result = exporter.parse(scene, { binary: true }); const blob = new Blob([result], { type: 'application/octet-stream' }); const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = `${projectNameInput.value || 'scene'}.stl`; link.click(); URL.revokeObjectURL(link.href); }
+          
+           function clearScene(newProject) {
+               transformControls.detach(); infoPanel.classList.add('hidden');
+               Array.from(sceneObjects.keys()).forEach(key => {
+                   const obj = sceneObjects.get(key);
+                   scene.remove(obj);
+                   if (obj.geometry) obj.geometry.dispose();
+                   if (obj.material) obj.material.dispose();
+               });
+               sceneObjects.clear(); objectCounter = 0;
+               if(newProject) {
+                   projectNameInput.value = '';
+                   addMessageToChat("New project started. Name it to save.", 'bot');
+               } else {
+                   addMessageToChat("Scene cleared.", 'bot');
+               }
+           }
+          
+           function showNotification(message) {
+               const notification = document.getElementById('notification');
+               notification.textContent = message;
+               notification.classList.remove('opacity-0', 'translate-y-full');
+               setTimeout(() => {
+                   notification.classList.add('opacity-0', 'translate-y-full');
+               }, 2000);
+           }
+
+
+           async function handleUserMessage() {
+               const prompt = chatInput.value.trim(); if (!prompt) return;
+               addMessageToChat(prompt, 'user'); chatInput.value = '';
+               const loadingIndicator = document.getElementById('loading-indicator');
+               loadingIndicator.classList.remove('hidden');
+               try {
+                   const systemPrompt = `You are a 3D modeling assistant. The user will describe a scene. You must interpret their request and translate it into a series of structured JSON commands based on the provided schema. The user is currently working in these units: ${currentUnit}. Please consider this when they mention sizes. For example, 'a 50mm cube' means a scale of 0.05 on all axes if the base unit is meters. The origin (0,0,0) is the center of the grid floor. When creating an object, its position should be on the floor, not halfway through it. For example, a cube of size 2 should have a y-position of 1. Always respond with a valid JSON array of operations. If the user's request is unclear, return an empty array.`;
+                   const apiKey = "";
+                   const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+                   const schema = {type:"ARRAY",items:{type:"OBJECT",properties:{action:{type:"STRING",enum:["CREATE"]},shape:{type:"STRING",enum:["cube","sphere","cylinder","cone","torus","pyramid"]},color:{type:"STRING",description:"Color name or hex code."},scale:{type:"OBJECT",properties:{x:{type:"NUMBER"},y:{type:"NUMBER"},z:{type:"NUMBER"}}, description: "Scale in meters"},position:{type:"OBJECT",properties:{x:{type:"NUMBER"},y:{type:"NUMBER"},z:{type:"NUMBER"}}, description: "Position in meters"}},required:["action","shape"]}};
+                   const payload = {systemInstruction:{parts:[{text:systemPrompt}]},contents:[{parts:[{text:prompt}]}],generationConfig:{responseMimeType:"application/json",responseSchema:schema}};
+                   const response = await fetch(apiUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+                   if(!response.ok){throw new Error(`API call failed: ${response.status}`);}
+                   const result = await response.json();
+                   const operations = JSON.parse(result.candidates[0].content.parts[0].text);
+                   if (!operations || operations.length === 0) { addMessageToChat("I'm not sure how to do that. Can you be more specific?", 'bot'); return; }
+                   operations.forEach(op => createObject(op));
+               } catch (error) {
+                   console.error("Error calling AI API:", error);
+                   addMessageToChat("Sorry, I had trouble with that request. Could you try rephrasing?", 'bot');
+               } finally {
+                   loadingIndicator.classList.add('hidden');
+               }
+           }
+          
+           function createObject(op, nameOverride) {
+               let geometry;
+               const scale = op.scale || { x: 0.1, y: 0.1, z: 0.1 }; // Default to 10cm
+               switch (op.shape) {
+                   case 'sphere': geometry = new THREE.SphereGeometry(0.5, 32, 32); break;
+                   case 'cylinder': geometry = new THREE.CylinderGeometry(0.5, 0.5, 1, 32); break;
+                   case 'cone': geometry = new THREE.ConeGeometry(0.5, 1, 32); break;
+                   case 'pyramid': geometry = new THREE.ConeGeometry(0.5, 1, 4); break;
+                   case 'torus': geometry = new THREE.TorusGeometry(0.5, 0.2, 16, 100); break;
+                   default: geometry = new THREE.BoxGeometry(1, 1, 1); break;
+               }
+               const matProps = materials['Steel'];
+               const material = new THREE.MeshStandardMaterial({
+                   color: op.color ? new THREE.Color(op.color) : matProps.color,
+                   roughness: matProps.roughness,
+                   metalness: matProps.metalness
+               });
+               const mesh = new THREE.Mesh(geometry, material);
+               mesh.castShadow = true;
+               mesh.scale.set(scale.x, scale.y, scale.z);
+               const position = op.position || {x: (Math.random() - 0.5) * 5, y: 0, z: (Math.random() - 0.5) * 5};
+               mesh.position.set(position.x, position.y + (scale.y / 2), position.z);
+               const objectId = nameOverride || `${op.shape}_${objectCounter++}`;
+               mesh.name = objectId;
+               mesh.userData = { shape: op.shape, materialName: 'Steel' };
+               scene.add(mesh);
+               sceneObjects.set(objectId, mesh);
+               return mesh;
+           }
+       }
+      
+       authInit();
+   </script>
+</body>
+</html>
+
+
+
+
