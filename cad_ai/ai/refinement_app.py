@@ -82,6 +82,8 @@ def save_history(history):
 st.set_page_config(page_title="CADgpt", layout="wide")
 
 
+# --- Global Black & Muted Orange Theme ---
+# --- Global Black & Muted Orange Theme ---
 st.markdown(
     """
     <style>
@@ -97,7 +99,7 @@ st.markdown(
             padding-top: 0.5rem;
             padding-right: 0.5rem;
             padding-left: 0.5rem;
-            border-right: 1px solid #ff6600;
+            border-right: 1px solid #d97706;
         }
 
         /* Sidebar text + icons */
@@ -105,27 +107,28 @@ st.markdown(
         [data-testid="stSidebar"] h2, 
         [data-testid="stSidebar"] h3,
         [data-testid="stSidebar"] p {
-            color: #ff9900 !important;
+            color: #d97706 !important;
         }
 
         /* Buttons */
         div.stButton > button {
-            background-color: #ff6600 !important;
-            color: white !important;
+            background-color: #d97706 !important;
+            color: #ffffff !important;
             border-radius: 10px;
             border: none;
             padding: 0.5rem 1rem;
-            font-weight: bold;
+            font-weight: 600;
+            letter-spacing: 0.3px;
         }
 
         div.stButton > button:hover {
-            background-color: #ff8533 !important;
-            color: black !important;
+            background-color: #b45309 !important;
+            color: #f9fafb !important;
         }
 
         /* Headers in main panel */
         h1, h2, h3, h4, h5 {
-            color: #ff8000 !important;
+            color: #e07b18 !important;
         }
 
         /* Input boxes and text areas */
@@ -133,14 +136,14 @@ st.markdown(
         textarea {
             background-color: #1a1a1a !important;
             color: #f5f5f5 !important;
-            border: 1px solid #ff6600 !important;
+            border: 1px solid #d97706 !important;
             border-radius: 8px;
         }
 
         /* Model history cards */
         .stMarkdown {
-            background-color: #1a1a1a;
-            border: 1px solid #ff6600;
+            background-color: #181818;
+            border: 1px solid #d97706;
             border-radius: 8px;
             padding: 0.5rem;
             margin-bottom: 0.5rem;
@@ -148,7 +151,7 @@ st.markdown(
 
         /* File download or Load buttons */
         a, .stDownloadButton > button {
-            background-color: #ff6600 !important;
+            background-color: #d97706 !important;
             color: white !important;
             border-radius: 8px;
             font-weight: 600;
@@ -156,8 +159,8 @@ st.markdown(
         }
 
         a:hover, .stDownloadButton > button:hover {
-            background-color: #ff8533 !important;
-            color: black !important;
+            background-color: #b45309 !important;
+            color: white !important;
         }
 
         /* Tighten spacing */
@@ -169,6 +172,7 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
+
 
 # --- Tweak sidebar margins ---
 st.markdown(
