@@ -100,15 +100,17 @@ for i, h in enumerate(reversed(st.session_state.history)):
 # === MAIN UI ===
 st.subheader("🧠 CAD Model Generator")
 
-col1, col2 = st.columns([3, 1])
+col1, col2, col3 = st.columns([3, 1, 1])
+
 with col1:
     prompt = st.text_area(
         "Describe your 3D model:",
         value=st.session_state.get("last_prompt", ""),
         height=100
     )
+
 with col2:
-    # 🆕 New Chat button — resets everything
+    # 🆕 New Chat button — resets the current session state
     if st.button("🆕 New Chat", use_container_width=True):
         for key in [
             "preview_html",
@@ -117,10 +119,28 @@ with col2:
             "last_prompt"
         ]:
             st.session_state.pop(key, None)
-        st.success("✨ New chat started — ready for a fresh model!")
+        st.success("✨ New chat started — workspace cleared.")
         st.rerun()
 
+with col3:
+    # 🧹 Clear History button — deletes all stored models
+    if st.button("🧹 Clear History", use_container_width=True):
+        confirm = st.warning("⚠️ This will delete all saved models. Click again to confirm.")
+        if st.button("Confirm Delete", use_container_width=True, key="confirm_clear"):
+            try:
+                st.session_state.history = []
+                if os.path.exists(HISTORY_FILE):
+                    os.remove(HISTORY_FILE)
+                for f in os.listdir(MODELS_DIR):
+                    if f.endswith(".stl"):
+                        os.remove(os.path.join(MODELS_DIR, f))
+                st.success("🧹 All model history cleared.")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error clearing history: {e}")
+
 generate = st.button("⚙️ Generate Fresh Model")
+
 
 
 
