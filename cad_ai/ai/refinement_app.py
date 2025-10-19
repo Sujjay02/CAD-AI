@@ -96,8 +96,8 @@ st.markdown(
         [data-testid="stSidebar"] h2, 
         [data-testid="stSidebar"] h3, 
         [data-testid="stSidebar"] p {
-            margin-top: 0.3rem;
-            margin-bottom: 0.3rem;
+            margin-top: 0.03rem;
+            margin-bottom: 0.03rem;
         }
 
         /* Compress the space between history items */
