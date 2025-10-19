@@ -80,6 +80,37 @@ def save_history(history):
 
 # === STREAMLIT UI ===
 st.set_page_config(page_title="CADgpt", layout="wide")
+
+# --- Tweak sidebar margins ---
+st.markdown(
+    """
+    <style>
+        /* Reduce padding around the sidebar */
+        [data-testid="stSidebar"] {
+            padding-top: 0.5rem;
+            padding-right: 0.5rem;
+            padding-left: 0.5rem;
+        }
+
+        /* Tighten up header and text spacing */
+        [data-testid="stSidebar"] h2, 
+        [data-testid="stSidebar"] h3, 
+        [data-testid="stSidebar"] p {
+            margin-top: 0.3rem;
+            margin-bottom: 0.3rem;
+        }
+
+        /* Compress the space between history items */
+        .stMarkdown {
+            margin-bottom: 0.4rem;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+
+
 st.title("🧠 CADgpt")
 
 if "history" not in st.session_state:
