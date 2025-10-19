@@ -102,7 +102,7 @@ st.markdown(
 
         /* Compress the space between history items */
         .stMarkdown {
-            margin-bottom: 0.4rem;
+            margin-bottom: 0.2rem;
         }
     </style>
     """,
