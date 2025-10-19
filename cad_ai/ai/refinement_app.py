@@ -32,7 +32,7 @@ def validate_code(code: str) -> bool:
         compile(code, "<string>", "exec")
         return True
     except SyntaxError as e:
-        st.error(f"⚠️ Syntax error: {e}")
+        st.error(f"Syntax error: {e}")
         return False
 
 def safe_exec(code: str):
@@ -44,7 +44,7 @@ def safe_exec(code: str):
             if isinstance(v, cq.Workplane):
                 return v
     except Exception as e:
-        st.error(f"❌ Execution error:\n{e}")
+        st.error(f"Execution error:\n{e}")
     return None
 
 def export_stl(model, filename):
@@ -210,19 +210,19 @@ if "history" not in st.session_state:
     st.session_state.history = load_history()
 
 # === SIDEBAR GALLERY ===
-st.sidebar.header("📂 Model History")
+st.sidebar.header("Model History")
 for i, h in enumerate(reversed(st.session_state.history)):
     st.sidebar.markdown(f"**{h['prompt']}**  \n_{h['timestamp'][:19]}_")
     with st.sidebar:
         components.html(make_html_viewer(h["stl_b64"], height=150), height=170)
-    if st.sidebar.button(f"🧩 Load {h['filename']}", key=f"load_{i}"):
+    if st.sidebar.button(f"Load {h['filename']}", key=f"load_{i}"):
         st.session_state.preview_html = make_html_viewer(h["stl_b64"])
         st.session_state.exported_file = h["path"]
         st.session_state.last_code = h["code"]
         st.session_state.last_prompt = h["prompt"]
 
 # === MAIN UI ===
-st.subheader("🧠 CAD Model Generator")
+st.subheader("CAD Model Generator")
 
 col1, col2, col3 = st.columns([3, 1, 1])
 
@@ -235,7 +235,7 @@ with col1:
 
 with col2:
     # 🆕 New Chat button — resets the current session state
-    if st.button("🆕 New Chat", use_container_width=True):
+    if st.button("New Chat", use_container_width=True):
         for key in [
             "preview_html",
             "exported_file",
@@ -243,13 +243,13 @@ with col2:
             "last_prompt"
         ]:
             st.session_state.pop(key, None)
-        st.success("✨ New chat started — workspace cleared.")
+        st.success("New chat started — workspace cleared.")
         st.rerun()
 
 with col3:
     # 🧹 Clear History button — deletes all stored models
-    if st.button("🧹 Clear History", use_container_width=True):
-        confirm = st.warning("⚠️ This will delete all saved models. Click again to confirm.")
+    if st.button("Clear History", use_container_width=True):
+        confirm = st.warning("This will delete all saved models. Click again to confirm.")
         if st.button("Confirm Delete", use_container_width=True, key="confirm_clear"):
             try:
                 st.session_state.history = []
@@ -258,18 +258,18 @@ with col3:
                 for f in os.listdir(MODELS_DIR):
                     if f.endswith(".stl"):
                         os.remove(os.path.join(MODELS_DIR, f))
-                st.success("🧹 All model history cleared.")
+                st.success("All model history cleared.")
                 st.rerun()
             except Exception as e:
                 st.error(f"Error clearing history: {e}")
 
-generate = st.button("⚙️ Generate Fresh Model")
+generate = st.button("Generate Fresh Model")
 
 
 
 
-refine_prompt = st.text_input("🔁 Refine last model (describe change):", placeholder="e.g. make the base thicker")
-refine = st.button("✏️ Apply Refinement")
+refine_prompt = st.text_input("Refine last model (describe change):", placeholder="e.g. make the base thicker")
+refine = st.button("Apply Refinement")
 
 def run_and_display(ai_code, prompt):
     if not validate_code(ai_code):
@@ -292,13 +292,13 @@ def run_and_display(ai_code, prompt):
         }
         st.session_state.history.append(entry)
         save_history(st.session_state.history)
-        st.success(f"✅ Saved `{filename}`.")
+        st.success(f"Saved `{filename}`.")
     else:
-        st.error("⚠️ Invalid CadQuery code.")
+        st.error("Invalid CadQuery code.")
 
 # === GENERATE NEW MODEL ===
 if generate:
-    with st.spinner("🎨 Creating model..."):
+    with st.spinner("Creating model..."):
         try:
             response = client.chat.completions.create(
                 prompt=f"Write only valid CadQuery Python code that defines a model using cq.Workplane('XY'). "
@@ -316,7 +316,7 @@ if generate:
 
 # === REFINEMENT ===
 if refine and "last_code" in st.session_state:
-    with st.spinner("✏️ Refining model..."):
+    with st.spinner("Refining model..."):
         try:
             old_code = st.session_state.last_code
             edit_instruction = f"Modify this CadQuery script to {refine_prompt}. Keep all context and variable names the same."
@@ -327,7 +327,7 @@ if refine and "last_code" in st.session_state:
                 is_stream=False,
             )
             refined_code = clean_ai_output(response.choices[0].message.content)
-            st.text_area("🧩 Refined AI Code", value=refined_code, height=200)
+            st.text_area("Refined AI Code", value=refined_code, height=200)
             run_and_display(refined_code, f"{st.session_state.last_prompt} → refined: {refine_prompt}")
             st.session_state.last_code = refined_code
         except Exception as e:
@@ -335,13 +335,13 @@ if refine and "last_code" in st.session_state:
 
 # === PREVIEW & DOWNLOAD ===
 if "preview_html" in st.session_state:
-    st.subheader("🧩 3D Preview")
+    st.subheader("3D Preview")
     st.components.v1.html(st.session_state.preview_html, height=600)
 
 if "exported_file" in st.session_state and os.path.exists(st.session_state.exported_file):
     with open(st.session_state.exported_file, "rb") as f:
         st.download_button(
-            label="⬇️ Download STL",
+            label="⬇Download STL",
             data=f,
             file_name=os.path.basename(st.session_state.exported_file),
             mime="application/sla",
